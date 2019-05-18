@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28803.202
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SlackRedditBot.Web", "SlackRedditBot.Web\SlackRedditBot.Web.csproj", "{B8EB677A-5157-4FF6-BEBE-BF4C582A196F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B8EB677A-5157-4FF6-BEBE-BF4C582A196F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B8EB677A-5157-4FF6-BEBE-BF4C582A196F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B8EB677A-5157-4FF6-BEBE-BF4C582A196F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B8EB677A-5157-4FF6-BEBE-BF4C582A196F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9E88B676-DA83-4833-BAE4-DC35BB4D78A4}
+	EndGlobalSection
+EndGlobal
