@@ -63,7 +63,7 @@
                                 var subtype = (string)eventObj["subtype"];
                                 var text = (string)eventObj["text"];
 
-                                if (subtype != null || !appSettings.Triggers.Any(w => text.Contains(w)))
+                                if (subtype != null || !appSettings.Triggers.Any(w => text.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0))
                                 {
                                     continue;
                                 }
