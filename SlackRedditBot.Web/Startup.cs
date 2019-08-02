@@ -12,6 +12,7 @@
     using Microsoft.Extensions.Options;
     using Models;
     using Newtonsoft.Json.Linq;
+    using Processors;
     using Services;
 
     public class Startup
@@ -42,6 +43,7 @@
                 }
             });
             services.AddSingleton<ObservableQueue<JObject>>();
+            services.AddScoped<RedditProcessor>();
             services.AddHostedService<RedditService>();
             services.AddMvc(options =>
             {

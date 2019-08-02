@@ -21,16 +21,16 @@
 
     public class AppController : Controller
     {
-        private readonly AppSettings appSettings;
+        private readonly AppSettings settings;
         private readonly AppDbContext db;
         private readonly HttpClient httpClient;
         private readonly ObservableQueue<JObject> requestQueue;
 
         public AppController(
-            IOptionsMonitor<AppSettings> options, AppDbContext db, HttpClient httpClient, ObservableQueue<JObject> requestQueue)
+            AppDbContext db, IOptions<AppSettings> options, HttpClient httpClient, ObservableQueue<JObject> requestQueue)
         {
-            appSettings = options.CurrentValue;
             this.db = db;
+            settings = options.Value;
             this.httpClient = httpClient;
             this.requestQueue = requestQueue;
         }
@@ -39,7 +39,7 @@
         [HttpGet]
         public IActionResult About()
         {
-            return View("Home", appSettings);
+            return View("Home", settings);
         }
 
         [Route("install")]
@@ -49,14 +49,14 @@
             try
             {
                 var tokenHandler = new JwtSecurityTokenHandler();
-                var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(appSettings.ClientSecret));
+                var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.ClientSecret));
                 var state = tokenHandler.CreateEncodedJwt(new SecurityTokenDescriptor
                 {
                     Expires = DateTime.UtcNow + TimeSpan.FromMinutes(10),
                     SigningCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature)
                 });
 
-                return Redirect($"https://slack.com/oauth/authorize?client_id={appSettings.ClientId}&scope={appSettings.Scopes}&state={state}");
+                return Redirect($"https://slack.com/oauth/authorize?client_id={settings.ClientId}&scope={settings.Scopes}&state={state}");
             }
             catch (Exception e)
             {
@@ -82,7 +82,7 @@
                     ValidateAudience = false,
                     ValidateIssuer = false,
                     ClockSkew = TimeSpan.Zero,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(appSettings.ClientSecret))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.ClientSecret))
                 };
 
                 try
@@ -103,7 +103,7 @@
                     throw new Exception("Permissions not accepted.");
                 }
 
-                var basicAuth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{appSettings.ClientId}:{appSettings.ClientSecret}"));
+                var basicAuth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.ClientId}:{settings.ClientSecret}"));
                 var formValues = new Dictionary<string, string> { { "code", code } };
 
                 using (var request = new HttpRequestMessage(HttpMethod.Post, "https://slack.com/api/oauth.access")
@@ -134,7 +134,7 @@
                     await db.SaveChangesAsync(cancellationToken);
                 }
 
-                return Redirect($"https://slack.com/app_redirect?app={appSettings.AppId}");
+                return Redirect($"https://slack.com/app_redirect?app={settings.AppId}");
             }
             catch (Exception e)
             {
@@ -168,7 +168,7 @@
                     var body = await bodyReader.ReadToEndAsync();
                     var stringToHash = $"v0:{timestamp}:{body}";
 
-                    using (var algo = new HMACSHA256(Encoding.UTF8.GetBytes(appSettings.SigningSecret)))
+                    using (var algo = new HMACSHA256(Encoding.UTF8.GetBytes(settings.SigningSecret)))
                     {
                         var hashBytes = algo.ComputeHash(Encoding.UTF8.GetBytes(stringToHash));
                         var hashHex = BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLower();
@@ -216,18 +216,6 @@
             }
         }
 
-        private static async Task<ViewResult> GetErrorView(Exception e)
-        {
-            await Console.Error.WriteLineAsync(e.ToString());
-
-            return new ViewResult
-            {
-                StatusCode = StatusCodes.Status500InternalServerError,
-                ViewName = "Error",
-                ViewData = { Model = e },
-            };
-        }
-
         private static async Task<ContentResult> GetBadRequestText(string message)
         {
             await Console.Error.WriteLineAsync(message);
@@ -248,6 +236,13 @@
                 StatusCode = StatusCodes.Status500InternalServerError,
                 Content = e.Message,
             };
+        }
+
+        private async Task<ViewResult> GetErrorView(Exception e)
+        {
+            await Console.Error.WriteLineAsync(e.ToString());
+
+            return View("Error", e);
         }
     }
 }
