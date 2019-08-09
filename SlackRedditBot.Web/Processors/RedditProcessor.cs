@@ -42,37 +42,34 @@
             switch (type)
             {
                 case "app_uninstalled":
-                    {
-                        db.Instances.Remove(instance);
-                        await db.SaveChangesAsync(stoppingToken);
-
-                        return;
-                    }
+                    db.Instances.Remove(instance);
+                    await db.SaveChangesAsync(stoppingToken);
+                    return;
 
                 case "message":
-                    {
-                        var subtype = (string)eventObj["subtype"];
-                        var text = (string)eventObj["text"];
-
-                        if (subtype != null || !settings.Triggers.Any(w =>
-                                text.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0))
-                        {
-                            return;
-                        }
-
-                        var channel = (string)eventObj["channel"];
-                        var birdUrl = await GetRandomBirdUrl(stoppingToken);
-
-                        await PostResponse(channel, instance.AccessToken, birdUrl, stoppingToken);
-
-                        return;
-                    }
+                    await ProcessMessage(eventObj, instance, stoppingToken);
+                    return;
 
                 default:
-                    {
-                        throw new Exception($"Unsupported event callback type '{type}'.");
-                    }
+                    throw new Exception($"Unsupported event callback type '{type}'.");
             }
+        }
+
+        private async Task ProcessMessage(JObject eventObj, Instance instance, CancellationToken stoppingToken)
+        {
+            var subtype = (string)eventObj["subtype"];
+            var text = (string)eventObj["text"];
+
+            if (subtype != null || !settings.Triggers.Any(w =>
+                    text.IndexOf(w, StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return;
+            }
+
+            var channel = (string)eventObj["channel"];
+            var birdUrl = await GetRandomBirdUrl(stoppingToken);
+
+            await PostResponse(channel, instance.AccessToken, birdUrl, stoppingToken);
         }
 
         private async Task PostResponse(string channel, string bearerToken, string text, CancellationToken cancellationToken)
