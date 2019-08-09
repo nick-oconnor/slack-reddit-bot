@@ -37,7 +37,7 @@
                     UserAgent =
                     {
                         new ProductInfoHeaderValue(
-                            options.GetService<IOptionsMonitor<AppSettings>>().CurrentValue.ProductName,
+                            options.GetService<IOptions<AppSettings>>().Value.ProductName,
                             Assembly.GetExecutingAssembly().GetName().Version.ToString())
                     }
                 }
