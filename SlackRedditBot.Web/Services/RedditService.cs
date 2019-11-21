@@ -6,9 +6,9 @@
     using System.Threading.Tasks;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
-    using Models;
     using Newtonsoft.Json.Linq;
-    using Processors;
+    using SlackRedditBot.Web.Models;
+    using SlackRedditBot.Web.Processors;
 
     public class RedditService : BackgroundService
     {
@@ -27,9 +27,9 @@
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var requestObj = await requestQueue.Dequeue(stoppingToken);
+                var requestObj = await this.requestQueue.Dequeue(stoppingToken);
 
-                tasks.Add(ProcessEvent(requestObj, stoppingToken));
+                tasks.Add(this.ProcessEvent(requestObj, stoppingToken));
                 tasks.RemoveAll(t => t.IsCompleted);
             }
 
@@ -40,11 +40,9 @@
         {
             try
             {
-                using (var scope = serviceProvider.CreateScope())
-                {
-                    await scope.ServiceProvider.GetRequiredService<RedditProcessor>()
-                        .ProcessRequest(requestObj, stoppingToken);
-                }
+                using var scope = this.serviceProvider.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<RedditProcessor>()
+.ProcessRequest(requestObj, stoppingToken);
             }
             catch (OperationCanceledException)
             {

@@ -11,14 +11,14 @@
 
         public void Enqueue(T item)
         {
-            queue.Enqueue(item);
-            sem.Release();
+            this.queue.Enqueue(item);
+            this.sem.Release();
         }
 
         public async Task<T> Dequeue(CancellationToken cancellationToken)
         {
-            await sem.WaitAsync(cancellationToken);
-            queue.TryDequeue(out var item);
+            await this.sem.WaitAsync(cancellationToken);
+            this.queue.TryDequeue(out var item);
 
             return item;
         }

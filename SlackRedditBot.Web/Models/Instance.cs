@@ -1,6 +1,6 @@
 ﻿namespace SlackRedditBot.Web.Models
 {
-    public class Instance 
+    public class Instance
     {
         public string TeamId { get; set; }
 

@@ -9,28 +9,30 @@
     using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Options;
-    using Models;
     using Newtonsoft.Json.Linq;
-    using Processors;
-    using Services;
+    using SlackRedditBot.Web.Models;
+    using SlackRedditBot.Web.Processors;
+    using SlackRedditBot.Web.Services;
 
     public class Startup
     {
         public Startup(IConfiguration configuration)
         {
-            Configuration = configuration;
+            this.Configuration = configuration;
         }
 
         public IConfiguration Configuration { get; }
 
         public void ConfigureServices(IServiceCollection services)
         {
-            var connectionString = Configuration.GetConnectionString("AppDbContext");
+            var connectionString = this.Configuration.GetConnectionString("AppDbContext");
 
-            services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
+            services.Configure<AppSettings>(this.Configuration.GetSection("AppSettings"));
             services.AddDbContext<AppDbContext>(options => options.UseMySql(connectionString));
-            services.AddSingleton(options => new HttpClient
+            services.AddSingleton<ObservableQueue<JObject>>();
+            services.AddScoped(options => new HttpClient
             {
                 DefaultRequestHeaders =
                 {
@@ -38,24 +40,16 @@
                     {
                         new ProductInfoHeaderValue(
                             options.GetService<IOptions<AppSettings>>().Value.ProductName,
-                            Assembly.GetExecutingAssembly().GetName().Version.ToString())
-                    }
-                }
+                            Assembly.GetExecutingAssembly().GetName().Version.ToString()),
+                    },
+                },
             });
-            services.AddSingleton<ObservableQueue<JObject>>();
             services.AddScoped<RedditProcessor>();
             services.AddHostedService<RedditService>();
-            services.AddMvc(options =>
-            {
-                options.Filters.Add(new ResponseCacheAttribute
-                {
-                    NoStore = true,
-                    Location = ResponseCacheLocation.None
-                });
-            }).SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+            services.AddControllersWithViews();
         }
 
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             if (env.IsDevelopment())
             {
@@ -66,7 +60,8 @@
                 app.UseHsts();
             }
 
-            app.UseMvc();
+            app.UseRouting();
+            app.UseEndpoints(endpoints => endpoints.MapControllers());
         }
     }
 }

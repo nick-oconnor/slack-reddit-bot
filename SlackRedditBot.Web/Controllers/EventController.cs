@@ -8,8 +8,8 @@
     using Microsoft.AspNetCore.Http;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.Extensions.Options;
-    using Models;
     using Newtonsoft.Json.Linq;
+    using SlackRedditBot.Web.Models;
 
     public class EventController : Controller
     {
@@ -18,21 +18,20 @@
 
         public EventController(IOptions<AppSettings> options, ObservableQueue<JObject> requestQueue)
         {
-            settings = options.Value;
+            this.settings = options.Value;
             this.requestQueue = requestQueue;
         }
 
-        [Route("event")]
-        [HttpPost]
+        [HttpPost("event")]
         public async Task<IActionResult> Event([FromBody] JObject requestObj)
         {
             try
             {
                 try
                 {
-                    var timestmap = GetEventTimestamp();
+                    var timestmap = this.GetEventTimestamp();
 
-                    await ValidateEventRequest(timestmap);
+                    await this.ValidateEventRequest(timestmap);
                 }
                 catch (Exception ex)
                 {
@@ -47,8 +46,8 @@
                         return new JsonResult(new { challenge = (string)requestObj["challenge"] });
 
                     case "event_callback":
-                        requestQueue.Enqueue(requestObj);
-                        return Ok();
+                        this.requestQueue.Enqueue(requestObj);
+                        return this.Ok();
 
                     default:
                         return await GetBadRequestText($"Unsupported event type '{type}'.");
@@ -84,7 +83,7 @@
 
         private string GetEventTimestamp()
         {
-            if (!Request.Headers.TryGetValue("X-Slack-Request-Timestamp", out var timestamp))
+            if (!this.Request.Headers.TryGetValue("X-Slack-Request-Timestamp", out var timestamp))
             {
                 throw new Exception("'X-Slack-Request-Timestamp' header not present.");
             }
@@ -102,29 +101,25 @@
 
         private async Task ValidateEventRequest(string timestamp)
         {
-            Request.Body.Position = 0;
+            this.Request.Body.Position = 0;
 
-            using (var bodyReader = new StreamReader(Request.Body))
+            using var bodyReader = new StreamReader(this.Request.Body);
+            var body = await bodyReader.ReadToEndAsync();
+            var stringToHash = $"v0:{timestamp}:{body}";
+
+            using var algo = new HMACSHA256(Encoding.UTF8.GetBytes(this.settings.SigningSecret));
+            var hashBytes = algo.ComputeHash(Encoding.UTF8.GetBytes(stringToHash));
+            var hashHex = BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLower();
+            var calculatedSignature = $"v0={hashHex}";
+
+            if (!this.Request.Headers.TryGetValue("X-Slack-Signature", out var requestSignature))
             {
-                var body = await bodyReader.ReadToEndAsync();
-                var stringToHash = $"v0:{timestamp}:{body}";
+                throw new Exception("'X-Slack-Signature' header not present.");
+            }
 
-                using (var algo = new HMACSHA256(Encoding.UTF8.GetBytes(settings.SigningSecret)))
-                {
-                    var hashBytes = algo.ComputeHash(Encoding.UTF8.GetBytes(stringToHash));
-                    var hashHex = BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLower();
-                    var calculatedSignature = $"v0={hashHex}";
-
-                    if (!Request.Headers.TryGetValue("X-Slack-Signature", out var requestSignature))
-                    {
-                        throw new Exception("'X-Slack-Signature' header not present.");
-                    }
-
-                    if (calculatedSignature != requestSignature)
-                    {
-                        throw new Exception("Invalid message signature.");
-                    }
-                }
+            if (calculatedSignature != requestSignature)
+            {
+                throw new Exception("Invalid message signature.");
             }
         }
     }
