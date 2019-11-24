@@ -7,6 +7,7 @@
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Http;
     using Microsoft.AspNetCore.Mvc;
+    using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Newtonsoft.Json.Linq;
     using SlackRedditBot.Web.Models;
@@ -15,11 +16,13 @@
     {
         private readonly AppSettings settings;
         private readonly ObservableQueue<JObject> requestQueue;
+        private readonly ILogger<EventController> logger;
 
-        public EventController(IOptions<AppSettings> options, ObservableQueue<JObject> requestQueue)
+        public EventController(IOptions<AppSettings> options, ObservableQueue<JObject> requestQueue, ILogger<EventController> logger)
         {
             this.settings = options.Value;
             this.requestQueue = requestQueue;
+            this.logger = logger;
         }
 
         [HttpPost("event")]
@@ -35,7 +38,7 @@
                 }
                 catch (Exception ex)
                 {
-                    return await GetBadRequestText(ex.Message);
+                    return this.GetBadRequestText(ex.Message);
                 }
 
                 var type = (string)requestObj["type"];
@@ -50,18 +53,18 @@
                         return this.Ok();
 
                     default:
-                        return await GetBadRequestText($"Unsupported event type '{type}'.");
+                        return this.GetBadRequestText($"Unsupported event type '{type}'.");
                 }
             }
             catch (Exception e)
             {
-                return await GetErrorText(e);
+                return this.GetErrorText(e);
             }
         }
 
-        private static async Task<ContentResult> GetBadRequestText(string message)
+        private ContentResult GetBadRequestText(string message)
         {
-            await Console.Error.WriteLineAsync(message);
+            this.logger.LogError(message);
 
             return new ContentResult
             {
@@ -70,9 +73,9 @@
             };
         }
 
-        private static async Task<ContentResult> GetErrorText(Exception e)
+        private ContentResult GetErrorText(Exception e)
         {
-            await Console.Error.WriteLineAsync(e.ToString());
+            this.logger.LogError(e.ToString());
 
             return new ContentResult
             {

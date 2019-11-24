@@ -10,6 +10,7 @@
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Mvc;
     using Microsoft.EntityFrameworkCore;
+    using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
     using Microsoft.IdentityModel.Tokens;
     using Newtonsoft.Json;
@@ -21,12 +22,14 @@
         private readonly AppSettings settings;
         private readonly AppDbContext db;
         private readonly HttpClient httpClient;
+        private readonly ILogger<AppController> logger;
 
-        public AppController(AppDbContext db, IOptions<AppSettings> options, HttpClient httpClient)
+        public AppController(AppDbContext db, IOptions<AppSettings> options, HttpClient httpClient, ILogger<AppController> logger)
         {
             this.db = db;
             this.settings = options.Value;
             this.httpClient = httpClient;
+            this.logger = logger;
         }
 
         [HttpGet("")]
@@ -36,7 +39,7 @@
         }
 
         [HttpGet("install")]
-        public async Task<IActionResult> Install()
+        public IActionResult Install()
         {
             try
             {
@@ -47,7 +50,7 @@
             }
             catch (Exception e)
             {
-                return await this.GetErrorView(e);
+                return this.GetErrorView(e);
             }
         }
 
@@ -71,13 +74,13 @@
             }
             catch (Exception e)
             {
-                return await this.GetErrorView(e);
+                return this.GetErrorView(e);
             }
         }
 
-        private async Task<ViewResult> GetErrorView(Exception e)
+        private ViewResult GetErrorView(Exception e)
         {
-            await Console.Error.WriteLineAsync(e.ToString());
+            this.logger.LogError(e.ToString());
 
             return this.View("Error", e);
         }

@@ -6,6 +6,7 @@
     using System.Threading.Tasks;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
+    using Microsoft.Extensions.Logging;
     using Newtonsoft.Json.Linq;
     using SlackRedditBot.Web.Models;
     using SlackRedditBot.Web.Processors;
@@ -14,11 +15,13 @@
     {
         private readonly IServiceProvider serviceProvider;
         private readonly ObservableQueue<JObject> requestQueue;
+        private readonly ILogger<RedditService> logger;
 
-        public RedditService(IServiceProvider serviceProvider, ObservableQueue<JObject> requestQueue)
+        public RedditService(IServiceProvider serviceProvider, ObservableQueue<JObject> requestQueue, ILogger<RedditService> logger)
         {
             this.serviceProvider = serviceProvider;
             this.requestQueue = requestQueue;
+            this.logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -49,7 +52,7 @@
             }
             catch (Exception e)
             {
-                await Console.Error.WriteLineAsync(e.ToString());
+                this.logger.LogError(e.ToString());
             }
         }
     }
