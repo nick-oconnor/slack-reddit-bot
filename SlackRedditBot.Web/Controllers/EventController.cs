@@ -1,46 +1,53 @@
-﻿namespace SlackRedditBot.Web.Controllers
-{
-    using System;
-    using System.IO;
-    using System.Security.Cryptography;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.AspNetCore.Http;
-    using Microsoft.AspNetCore.Mvc;
-    using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-    using Newtonsoft.Json.Linq;
-    using SlackRedditBot.Web.Models;
+﻿using System;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using SlackRedditBot.Web.Models;
 
+namespace SlackRedditBot.Web.Controllers
+{
     public class EventController : Controller
     {
-        private readonly AppSettings settings;
-        private readonly ObservableQueue<JObject> requestQueue;
-        private readonly ILogger<EventController> logger;
+        private readonly AppSettings _settings;
+        private readonly Channel<JObject> _requestChannel;
+        private readonly ILogger<EventController> _logger;
 
-        public EventController(IOptions<AppSettings> options, ObservableQueue<JObject> requestQueue, ILogger<EventController> logger)
+        public EventController(IOptions<AppSettings> options, Channel<JObject> requestChannel,
+            ILogger<EventController> logger)
         {
-            this.settings = options.Value;
-            this.requestQueue = requestQueue;
-            this.logger = logger;
+            _settings = options.Value;
+            _requestChannel = requestChannel;
+            _logger = logger;
         }
 
         [HttpPost("event")]
-        public async Task<IActionResult> Event([FromBody] JObject requestObj)
+        public async Task<IActionResult> Event()
         {
             try
             {
+                Request.Body.Position = 0;
+
+                using var bodyReader = new StreamReader(Request.Body);
+                var body = await bodyReader.ReadToEndAsync();
+
                 try
                 {
-                    var timestmap = this.GetEventTimestamp();
-
-                    await this.ValidateEventRequest(timestmap);
+                    ValidateEventRequest(body);
                 }
                 catch (Exception ex)
                 {
-                    return this.GetBadRequestText(ex.Message);
+                    return GetBadRequestText(ex.Message);
                 }
 
+                var requestObj = (JObject)JsonConvert.DeserializeObject(body);
                 var type = (string)requestObj["type"];
 
                 switch (type)
@@ -49,44 +56,44 @@
                         return new JsonResult(new { challenge = (string)requestObj["challenge"] });
 
                     case "event_callback":
-                        this.requestQueue.Enqueue(requestObj);
-                        return this.Ok();
+                        await _requestChannel.Writer.WriteAsync(requestObj);
+                        return Ok();
 
                     default:
-                        return this.GetBadRequestText($"Unsupported event type '{type}'.");
+                        return GetBadRequestText($"Unsupported event type '{type}'.");
                 }
             }
             catch (Exception e)
             {
-                return this.GetErrorText(e);
+                return GetErrorText(e);
             }
         }
 
         private ContentResult GetBadRequestText(string message)
         {
-            this.logger.LogError(message);
+            _logger.LogError(message);
 
             return new ContentResult
             {
                 StatusCode = StatusCodes.Status400BadRequest,
-                Content = message,
+                Content = message
             };
         }
 
         private ContentResult GetErrorText(Exception e)
         {
-            this.logger.LogError(e.ToString());
+            _logger.LogError(e.ToString());
 
             return new ContentResult
             {
                 StatusCode = StatusCodes.Status500InternalServerError,
-                Content = e.Message,
+                Content = e.Message
             };
         }
 
-        private string GetEventTimestamp()
+        private void ValidateEventRequest(string body)
         {
-            if (!this.Request.Headers.TryGetValue("X-Slack-Request-Timestamp", out var timestamp))
+            if (!Request.Headers.TryGetValue("X-Slack-Request-Timestamp", out var timestamp))
             {
                 throw new Exception("'X-Slack-Request-Timestamp' header not present.");
             }
@@ -99,23 +106,14 @@
                 throw new Exception("Message is older than 5 minutes.");
             }
 
-            return timestamp;
-        }
-
-        private async Task ValidateEventRequest(string timestamp)
-        {
-            this.Request.Body.Position = 0;
-
-            using var bodyReader = new StreamReader(this.Request.Body);
-            var body = await bodyReader.ReadToEndAsync();
             var stringToHash = $"v0:{timestamp}:{body}";
 
-            using var algo = new HMACSHA256(Encoding.UTF8.GetBytes(this.settings.SigningSecret));
+            using var algo = new HMACSHA256(Encoding.UTF8.GetBytes(_settings.SigningSecret));
             var hashBytes = algo.ComputeHash(Encoding.UTF8.GetBytes(stringToHash));
             var hashHex = BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLower();
             var calculatedSignature = $"v0={hashHex}";
 
-            if (!this.Request.Headers.TryGetValue("X-Slack-Signature", out var requestSignature))
+            if (!Request.Headers.TryGetValue("X-Slack-Signature", out var requestSignature))
             {
                 throw new Exception("'X-Slack-Signature' header not present.");
             }

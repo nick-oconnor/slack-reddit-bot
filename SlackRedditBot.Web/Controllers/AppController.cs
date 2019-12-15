@@ -1,41 +1,42 @@
-﻿namespace SlackRedditBot.Web.Controllers
-{
-    using System;
-    using System.Collections.Generic;
-    using System.IdentityModel.Tokens.Jwt;
-    using System.Net.Http;
-    using System.Net.Http.Headers;
-    using System.Text;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.AspNetCore.Mvc;
-    using Microsoft.EntityFrameworkCore;
-    using Microsoft.Extensions.Logging;
-    using Microsoft.Extensions.Options;
-    using Microsoft.IdentityModel.Tokens;
-    using Newtonsoft.Json;
-    using Newtonsoft.Json.Linq;
-    using SlackRedditBot.Web.Models;
+﻿using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using SlackRedditBot.Web.Models;
 
+namespace SlackRedditBot.Web.Controllers
+{
     public class AppController : Controller
     {
-        private readonly AppSettings settings;
-        private readonly AppDbContext db;
-        private readonly HttpClient httpClient;
-        private readonly ILogger<AppController> logger;
+        private readonly AppSettings _settings;
+        private readonly AppDbContext _db;
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<AppController> _logger;
 
-        public AppController(AppDbContext db, IOptions<AppSettings> options, HttpClient httpClient, ILogger<AppController> logger)
+        public AppController(AppDbContext db, IOptions<AppSettings> options, HttpClient httpClient,
+            ILogger<AppController> logger)
         {
-            this.db = db;
-            this.settings = options.Value;
-            this.httpClient = httpClient;
-            this.logger = logger;
+            _db = db;
+            _settings = options.Value;
+            _httpClient = httpClient;
+            _logger = logger;
         }
 
         [HttpGet("")]
         public IActionResult Home()
         {
-            return this.View(this.settings);
+            return View(_settings);
         }
 
         [HttpGet("install")]
@@ -43,57 +44,58 @@
         {
             try
             {
-                return this.Redirect("https://slack.com/oauth/authorize?" +
-                                     $"client_id={this.settings.ClientId}" +
-                                     $"&scope={this.settings.Scopes}" +
-                                     $"&state={this.GetAuthState()}");
+                return Redirect("https://slack.com/oauth/authorize?" +
+                                     $"client_id={_settings.ClientId}" +
+                                     $"&scope={_settings.Scopes}" +
+                                     $"&state={GetAuthState()}");
             }
             catch (Exception e)
             {
-                return this.GetErrorView(e);
+                return GetErrorView(e);
             }
         }
 
         [HttpGet("authorize")]
-        public async Task<IActionResult> Authorize(string code, string state, string error, CancellationToken cancellationToken)
+        public async Task<IActionResult> Authorize(string code, string state, string error,
+            CancellationToken cancellationToken)
         {
             try
             {
-                this.ValidateAuthState(state);
+                ValidateAuthState(state);
 
                 if (error == "access_denied")
                 {
                     throw new Exception("Permissions not accepted.");
                 }
 
-                var instance = await this.GetAppInstance(code, cancellationToken);
+                var instance = await GetAppInstance(code, cancellationToken);
 
-                await this.SaveAppInstance(instance, cancellationToken);
+                await SaveAppInstance(instance, cancellationToken);
 
-                return this.Redirect($"https://slack.com/app_redirect?app={this.settings.AppId}");
+                return Redirect($"https://slack.com/app_redirect?app={_settings.AppId}");
             }
             catch (Exception e)
             {
-                return this.GetErrorView(e);
+                return GetErrorView(e);
             }
         }
 
         private ViewResult GetErrorView(Exception e)
         {
-            this.logger.LogError(e.ToString());
+            _logger.LogError(e.ToString());
 
-            return this.View("Error", e);
+            return View("Error", e);
         }
 
         private string GetAuthState()
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(this.settings.ClientSecret));
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.ClientSecret));
 
             return tokenHandler.CreateEncodedJwt(new SecurityTokenDescriptor
             {
                 Expires = DateTime.UtcNow + TimeSpan.FromMinutes(10),
-                SigningCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature),
+                SigningCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature)
             });
         }
 
@@ -111,7 +113,7 @@
                 ValidateAudience = false,
                 ValidateIssuer = false,
                 ClockSkew = TimeSpan.Zero,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(this.settings.ClientSecret)),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.ClientSecret))
             };
 
             try
@@ -130,15 +132,16 @@
 
         private async Task<Instance> GetAppInstance(string code, CancellationToken cancellationToken)
         {
-            var basicAuth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{this.settings.ClientId}:{this.settings.ClientSecret}"));
+            var basicAuth =
+                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_settings.ClientId}:{_settings.ClientSecret}"));
             var formValues = new Dictionary<string, string> { { "code", code } };
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://slack.com/api/oauth.access")
             {
                 Headers = { Authorization = new AuthenticationHeaderValue("Basic", basicAuth) },
-                Content = new FormUrlEncodedContent(formValues),
+                Content = new FormUrlEncodedContent(formValues)
             };
-            using var response = await this.httpClient.SendAsync(request, cancellationToken);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
             var responseBody = await response.Content.ReadAsStringAsync();
             var responseObj = (JObject)JsonConvert.DeserializeObject(responseBody);
 
@@ -150,24 +153,25 @@
             return new Instance
             {
                 TeamId = (string)responseObj["team_id"],
-                AccessToken = (string)responseObj["access_token"],
+                AccessToken = (string)responseObj["access_token"]
             };
         }
 
         private async Task SaveAppInstance(Instance instance, CancellationToken cancellationToken)
         {
-            var dbInstance = await this.db.Instances.SingleOrDefaultAsync(i => i.TeamId == instance.TeamId, cancellationToken);
+            var dbInstance =
+                await _db.Instances.SingleOrDefaultAsync(i => i.TeamId == instance.TeamId, cancellationToken);
 
             if (dbInstance == null)
             {
-                this.db.Instances.Add(instance);
+                _db.Instances.Add(instance);
             }
             else
             {
                 dbInstance.AccessToken = instance.AccessToken;
             }
 
-            await this.db.SaveChangesAsync(cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
         }
     }
 }

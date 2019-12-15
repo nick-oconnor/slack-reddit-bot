@@ -1,27 +1,28 @@
-﻿namespace SlackRedditBot.Web.Services
-{
-    using System;
-    using System.Collections.Generic;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.Extensions.DependencyInjection;
-    using Microsoft.Extensions.Hosting;
-    using Microsoft.Extensions.Logging;
-    using Newtonsoft.Json.Linq;
-    using SlackRedditBot.Web.Models;
-    using SlackRedditBot.Web.Processors;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
+using SlackRedditBot.Web.Processors;
 
+namespace SlackRedditBot.Web.Services
+{
     public class RedditService : BackgroundService
     {
-        private readonly IServiceProvider serviceProvider;
-        private readonly ObservableQueue<JObject> requestQueue;
-        private readonly ILogger<RedditService> logger;
+        private readonly IServiceProvider _serviceProvider;
+        private readonly Channel<JObject> _requestChannel;
+        private readonly ILogger<RedditService> _logger;
 
-        public RedditService(IServiceProvider serviceProvider, ObservableQueue<JObject> requestQueue, ILogger<RedditService> logger)
+        public RedditService(IServiceProvider serviceProvider, Channel<JObject> requestChannel,
+            ILogger<RedditService> logger)
         {
-            this.serviceProvider = serviceProvider;
-            this.requestQueue = requestQueue;
-            this.logger = logger;
+            _serviceProvider = serviceProvider;
+            _requestChannel = requestChannel;
+            _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,9 +31,9 @@
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                var requestObj = await this.requestQueue.Dequeue(stoppingToken);
+                var requestObj = await _requestChannel.Reader.ReadAsync(stoppingToken);
 
-                tasks.Add(this.ProcessEvent(requestObj, stoppingToken));
+                tasks.Add(ProcessEvent(requestObj, stoppingToken));
                 tasks.RemoveAll(t => t.IsCompleted);
             }
 
@@ -43,16 +44,16 @@
         {
             try
             {
-                using var scope = this.serviceProvider.CreateScope();
+                using var scope = _serviceProvider.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<RedditProcessor>()
-.ProcessRequest(requestObj, stoppingToken);
+                    .ProcessRequest(requestObj, stoppingToken);
             }
             catch (OperationCanceledException)
             {
             }
             catch (Exception e)
             {
-                this.logger.LogError(e.ToString());
+                _logger.LogError(e.ToString());
             }
         }
     }
